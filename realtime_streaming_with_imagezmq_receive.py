@@ -5,99 +5,94 @@ import imagezmq
 import argparse
 import imutils
 import cv2
-# construct the argument parser and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--prototxt", required=True,
-	help="path to Caffe 'deploy' prototxt file")
-ap.add_argument("-m", "--model", required=True,
-	help="path to Caffe pre-trained model")
-ap.add_argument("-c", "--confidence", type=float, default=0.2,
-	help="minimum probability to filter weak detections")
-ap.add_argument("-mW", "--montageW", required=True, type=int,
-	help="montage frame width")
-ap.add_argument("-mH", "--montageH", required=True, type=int,
-	help="montage frame height")
-args = vars(ap.parse_args())
 
+def getOutputsNames(net):
+    layersNames = net.getLayerNames()
+    return [layersNames[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+
+def postprocess(frame, outs):
+    frameHeight = frame.shape[0]
+    frameWidth = frame.shape[1]
+
+    classIds = []
+    confidences = []
+    boxes = []
+    for out in outs:
+        for detection in out:
+            scores = detection[5:]
+            classId = np.argmax(scores)
+            if classes[classId] != 'stop sign':
+                continue
+            confidence = scores[classId]
+            if confidence > confThreshold:
+                center_x = int(detection[0] * frameWidth)
+                center_y = int(detection[1] * frameHeight)
+                width = int(detection[2] * frameWidth)
+                height = int(detection[3] * frameHeight)
+                left = int(center_x - width / 2)
+                top = int(center_y - height / 2)
+                classIds.append(classId)
+                confidences.append(float(confidence))
+                boxes.append([left, top, width, height])
+    indices = cv2.dnn.NMSBoxes(boxes, confidences, confThreshold, nmsThreshold)
+    for i in indices:
+        i = i[0]
+        box = boxes[i]
+        left = box[0]
+        top = box[1]
+        width = box[2]
+        height = box[3]
+        drawPred(classIds[i], confidences[i], left, top, left + width, top + height)
+
+def drawPred(classId, conf, left, top, right, bottom):
+    cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255))
+    
+    label = '%.2f' % conf
+    label = '%s:%s' % (classes[classId], label)
+    
+    labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+    top = max(top, labelSize[1])
+    cv2.putText(frame, label, (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
+
+# construct the argument parser and parse the arguments
 imageHub = imagezmq.ImageHub()
 
-CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
-	"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
-	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
-	"sofa", "stop sign",  "train", "tvmonitor"]
+confThreshold = 0.5
+nmsThreshold = 0.4
+
+modelCfg = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/model&weight/yolov3.cfg'
+modelWeight = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/model&weight/yolov3.weights'
+classesFile = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/model&weight/coco.names'
+
+with open(classesFile, 'rt') as f:
+    classes = f.read().rstrip('\n').split('\n')
 
 # 사용할 모델 불러오기
 print("[INFO] loading model...")
-net = cv2.dnn.readNetFromCaffe(args["prototxt"], args["model"])
-
-CONSIDER = set(["person", "bottle"])
-objCount = {obj: 0 for obj in CONSIDER}
-frameDict = {}
-
-lastActive = {}
-lastActiveCheck = datetime.now()
-
-ESTIMATED_NUM_PIS = 4
-ACTIVE_CHECK_PERIOD = 10
-ACTIVE_CHECK_SECONDS = ESTIMATED_NUM_PIS * ACTIVE_CHECK_PERIOD
-
-mW = args["montageW"]
-mH = args["montageH"]
+net = cv2.dnn.readNetFromDarknet(modelCfg, modelWeight)
 
 while True:
     (rpiName, frame) = imageHub.recv_image()
     imageHub.send_reply(b'OK')
-
-    if rpiName not in lastActive.keys():
-        print("[INFO] receiving data from {}...".format(rpiName))
-
-    lastActive[rpiName] = datetime.now()
+    print("[INFO] Predicting will start...")
     
     frame = imutils.resize(frame, width=400)
     (h, w) = frame.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (320, 320)), 1/255, (320, 320), [0,0,0], 1, crop=False)
 
     net.setInput(blob)
-    detections = net.forward()
+    outs = net.forward(getOutputsNames(net))
+    outs = np.array(outs)
 
-    objCount = {obj: 0 for obj in CONSIDER}
+    print(outs.shape)
+    postprocess(frame, outs)
 
-    for i in np.arange(0, detections.shape[2]):
-        confidence = detections[0, 0, i, 2]
-
-        if confidence > args["confidence"]:
-            idx = int(detections[0, 0, i, 1])
-
-            if CLASSES[idx] in CONSIDER:
-                objCount[CLASSES[idx]] += 1
-                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                (startX, startY, endX, endY) = box.astype('int')
-                cv2.rectangle(frame, (startX, startY), (endX, endY), (255, 0, 0), 2)
-
-    cv2.putText(frame, rpiName, (10, 25),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-
-    label = ", ".join("{}: {}".format(obj, count) for (obj, count) in
-		objCount.items())
-    cv2.putText(frame, label, (10, h - 20),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255,0), 2)
-
-    frameDict[rpiName] = frame
-    montages = build_montages(frameDict.values(), (w, h), (mW, mH))
+    t, _ = net.getPerfProfile()
+    label = 'Inference time: %.2f ms' % (t * 1000.0 / cv2.getTickFrequency())
+    cv2.putText(frame, label, (0, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+    cv2.imshow('frame of realtime video', frame)
     
-    for (i, montage) in enumerate(montages):
-        cv2.imshow("Home pet location monitor ({})".format(i),
-			montage)
     key = cv2.waitKey(1) & 0xFF
-    if (datetime.now() - lastActiveCheck).seconds > ACTIVE_CHECK_SECONDS:
-        for (rpiName, ts) in list(lastActive.items()):
-            if (datetime.now() - ts).seconds > ACTIVE_CHECK_SECONDS:
-                print("[INFO] lost connection to {}".format(rpiName))
-                lastActive.pop(rpiName)
-                frameDict.pop(rpiName)
-        
-        lastActiveCheck = datetime.now()
-
     if key == ord("q"):
         break
 
