@@ -56,7 +56,8 @@ def drawPred(classId, conf, left, top, right, bottom):
 
 def receiveDistance():
     while True:
-        print(client_socket.recv(1024))
+        global distance
+        distance = client_socket.recv(1024)
 
 # construct the argument parser and parse the arguments
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -66,15 +67,16 @@ server_socket.listen()
 client_socket, addr = server_socket.accept()
 print('Connected by', addr)
 
+distance = 0
 
 imageHub = imagezmq.ImageHub()
 
 confThreshold = 0.5
 nmsThreshold = 0.4
 
-modelCfg = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/model&weight/yolov3-tiny.cfg'
-modelWeight = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/model&weight/yolov3-tiny.weights'
-classesFile = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/model&weight/coco.names'
+modelCfg = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/server/model&weight/yolov3-tiny.cfg'
+modelWeight = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/server/model&weight/yolov3-tiny.weights'
+classesFile = '/Users/gangbacol/Desktop/Development/socket_RaspberryPi_Mac/server/model&weight/coco.names'
 
 with open(classesFile, 'rt') as f:
     classes = f.read().rstrip('\n').split('\n')
@@ -83,7 +85,6 @@ with open(classesFile, 'rt') as f:
 print("[INFO] loading model...")
 net = cv2.dnn.readNetFromDarknet(modelCfg, modelWeight)
 
-count = 0
 t = threading.Thread(target=receiveDistance)
 t.start()
 while True:
@@ -107,6 +108,7 @@ while True:
     t, _ = net.getPerfProfile()
     label = 'Inference time: %.2f ms' % (t * 1000.0 / cv2.getTickFrequency())
     cv2.putText(frame, label, (0, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+    cv2.putText(frame, str(distance)+'cm', (15, (h-30)), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
     cv2.imshow('frame of realtime video', frame)
     
     key = cv2.waitKey(1) & 0xFF
