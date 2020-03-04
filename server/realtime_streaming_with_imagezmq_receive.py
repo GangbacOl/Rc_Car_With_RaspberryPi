@@ -24,7 +24,7 @@ def postprocess(frame, outs):
         for detection in out:
             scores = detection[5:]
             classId = np.argmax(scores)
-            if classes[classId] != 'stop sign':
+            if classes[classId] != 'stop sign' and classes[classId] != 'car':
                 continue
             print(str(classes[classId])+' detect!')
             confidence = scores[classId]
@@ -114,5 +114,4 @@ while True:
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
-    count += 1
 cv2.destroyAllWindows()
