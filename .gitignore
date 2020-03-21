@@ -1,5 +1,5 @@
 .DS_Store
-yolov3.weight
+yolov3.weights
 test/
 .ipynb_checkpoints/
 training_dataset/
