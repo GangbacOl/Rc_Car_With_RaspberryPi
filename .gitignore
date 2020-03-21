@@ -1,2 +1,3 @@
 .DS_Store
-yolov3.weights
+yolov3.weight
+server/test
