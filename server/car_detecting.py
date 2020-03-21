@@ -89,7 +89,7 @@ with open(classesFile, 'rt') as f:
 
 # 사용할 모델 불러오기
 print("[INFO] loading model...")
-net! = cv2.dnn.readNetFromDarknet(modelCfg, modelWeight)
+net = cv2.dnn.readNetFromDarknet(modelCfg, modelWeight)
 
 t = threading.Thread(target=receiveDistance)
 t.start()
