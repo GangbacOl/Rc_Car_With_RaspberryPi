@@ -2,3 +2,4 @@
 yolov3.weight
 test/
 .ipynb_checkpoints/
+training_dataset/
