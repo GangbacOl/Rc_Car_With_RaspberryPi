@@ -1,3 +1,4 @@
 .DS_Store
 yolov3.weight
-server/test
+test/
+.ipynb_checkpoints/
