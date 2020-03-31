@@ -15,6 +15,7 @@ def getOutputsNames(net):
     return [layersNames[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 def postprocess(frame, outs):
+    global is_stop
     frameHeight = frame.shape[0]
     frameWidth = frame.shape[1]
     obj_cnt = 0
@@ -32,14 +33,15 @@ def postprocess(frame, outs):
             if confidence > confThreshold:
                 box = detection[0:4] * np.array([frameWidth, frameHeight, frameWidth, frameHeight])
                 (center_x, center_y, width, height) = box.astype("int")
-                print(width)
                 x = int(center_x - width / 2)
                 y = int(center_y - height / 2)
                 classIds.append(classId)
                 confidences.append(float(confidence))
                 boxes.append([x, y, int(width), int(height)])
     indices = cv2.dnn.NMSBoxes(boxes, confidences, confThreshold, nmsThreshold)
-    if len(boxes) > 1:
+    if len(indices) > 0:
+        is_stop = True
+    if len(indices) > 1:
         indices = list(indices)
         if boxes[0][2] > boxes[1][2]:
             del boxes[1]
@@ -60,7 +62,6 @@ def postprocess(frame, outs):
         (x, y) = (box[0], box[1])
         (width, height) = (box[2], box[3])
         v_param = y + height
-        calculateDistance(v_param)
         drawPred(classIds[i], confidences[i], x, y, x + width, y + height)
 def drawPred(classId, conf, left, top, right, bottom):
     cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
@@ -72,15 +73,14 @@ def drawPred(classId, conf, left, top, right, bottom):
     top = max(top, labelSize[1])
     cv2.putText(frame, label, (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
 
-def receiveDistance():
+def sendStopSign():
     while True:
-        global distance
-        distance = client_socket.recv(1024)
-
-def calculateDistance(v_param):
-    distance2 = 4 / math.tan(0.1 + math.atan((v_param - 119.865631204) / 332.26249847))
-    print(distance2)
-
+        if is_stop:
+            print('stop')
+            client_socket.sendall(str('1').encode())
+            break
+        else:
+            print('go')
 # construct the argument parser and parse the arguments
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -89,7 +89,7 @@ server_socket.listen()
 client_socket, addr = server_socket.accept()
 print('Connected by', addr)
 
-distance = 0
+is_stop = False
 
 imageHub = imagezmq.ImageHub()
 
@@ -107,8 +107,9 @@ with open(classesFile, 'rt') as f:
 print("[INFO] loading model...")
 net = cv2.dnn.readNetFromDarknet(modelCfg, modelWeight)
 
-t = threading.Thread(target=receiveDistance)
-t.start()
+t1 = threading.Thread(target=sendStopSign)
+t1.start()
+
 while True:
     (rpiName, frame) = imageHub.recv_image()
     imageHub.send_reply(b'OK')
@@ -129,8 +130,6 @@ while True:
     
     t, _ = net.getPerfProfile()
     label = 'Inference time: %.2f ms' % (t * 1000.0 / cv2.getTickFrequency())
-    cv2.putText(frame, label, (0, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
-    cv2.putText(frame, str(distance)+'cm', (15, (h-30)), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
     cv2.imshow('frame of realtime video', frame)
     
     key = cv2.waitKey(1) & 0xFF
