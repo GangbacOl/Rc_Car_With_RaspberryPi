@@ -33,14 +33,23 @@ def dir_discriminator(img):
         if avg_angle > -160.2 and avg_angle < -100.0:
             print('left')
             print('angle: '+str(avg_angle))
+            client_socket.sendall(str('-1').encode())
             return -1, avg_angle
         elif avg_angle > 100.4 and avg_angle < 170.1:
             print('right')
             print('angle: '+str(avg_angle))
+            client_socket.sendall(str('1').encode())
             return 1, avg_angle
 
     except TypeError:
             return
+
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server_socket.bind(('192.168.219.110', 9999))
+server_socket.listen()
+client_socket, addr = server_socket.accept()
+print('Connected by', addr)
 
 imageHub = imagezmq.ImageHub()
 
