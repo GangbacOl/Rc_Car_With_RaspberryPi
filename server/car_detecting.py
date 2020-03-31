@@ -15,6 +15,7 @@ def getOutputsNames(net):
     return [layersNames[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 def postprocess(frame, outs):
+    global is_car 
     frameHeight = frame.shape[0]
     frameWidth = frame.shape[1]
     classIds = []
@@ -38,6 +39,8 @@ def postprocess(frame, outs):
                 boxes.append([x, y, int(width), int(height)])
 
     indices = cv2.dnn.NMSBoxes(boxes, confidences, confThreshold, nmsThreshold)
+    if len(indices) > 0:
+        is_car = True
     for i in indices:
         i = i[0]
         box = boxes[i]
@@ -56,14 +59,15 @@ def drawPred(classId, conf, left, top, right, bottom):
     top = max(top, labelSize[1])
     cv2.putText(frame, label, (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255))
 
-def receiveDistance():
+def sendStopSign():
     while True:
         global distance
-        distance = client_socket.recv(1024)
-
-def calculateDistance(v_param):
-    distance2 = 4 / math.tan(0.1 + math.atan((v_param - 119.865631204) / 332.26249847))
-    print(distance2)
+        distance = int(float(client_socket.recv(1024)))
+        if distance < 30 and is_car:
+            print('stop')
+            client_socket.sendall(str('1').encode())
+        else:
+            print('go')
 
 # construct the argument parser and parse the arguments
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -74,6 +78,7 @@ client_socket, addr = server_socket.accept()
 print('Connected by', addr)
 
 distance = 0
+is_car = False
 
 imageHub = imagezmq.ImageHub()
 
@@ -91,8 +96,9 @@ with open(classesFile, 'rt') as f:
 print("[INFO] loading model...")
 net = cv2.dnn.readNetFromDarknet(modelCfg, modelWeight)
 
-t = threading.Thread(target=receiveDistance)
-t.start()
+t1 = threading.Thread(target=sendStopSign)
+t1.start()
+
 while True:
     (rpiName, frame) = imageHub.recv_image()
     imageHub.send_reply(b'OK')
@@ -116,7 +122,7 @@ while True:
     cv2.putText(frame, label, (0, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
     cv2.putText(frame, str(distance)+'cm', (15, (h-30)), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
     cv2.imshow('frame of realtime video', frame)
-    
+
     key = cv2.waitKey(1) & 0xFF
     if key == ord("q"):
         break
