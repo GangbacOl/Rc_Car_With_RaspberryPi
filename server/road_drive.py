@@ -40,9 +40,11 @@ def dir_discriminator(img):
             print('angle: '+str(avg_angle))
             client_socket.sendall(str('1').encode())
             return 1, avg_angle
-
+            client_socket.sendall(str('0').encode())
+            return 0, 'straight'
     except TypeError:
-            return
+            client_socket.sendall(str('0').encode())
+            return 0, 'straight'
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

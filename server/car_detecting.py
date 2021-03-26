@@ -63,11 +63,12 @@ def sendStopSign():
     while True:
         global distance
         distance = int(float(client_socket.recv(1024)))
-        if distance < 30 and is_car:
+        if distance < 15 and is_car:
             print('stop')
-            client_socket.sendall(str('1').encode())
+            client_socket.sendall(str('-1').encode())
         else:
             print('go')
+            client_socket.sendall(str('1').encode())
 
 # construct the argument parser and parse the arguments
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
