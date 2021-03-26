@@ -9,7 +9,7 @@
 ## Video
 
 <p align="center">
-    [![video](./images/screen.png)](https://www.youtube.com/watch?v=jnEKRkWQSQI)
+    <a href="https://www.youtube.com/watch?v=jnEKRkWQSQI"><img src="./images/screen.png" width="70%"></a>
 </p>
 <br />
 
